@@ -1,0 +1,34 @@
+# Example configuration file for sessio
+# Copy this to ~/.config/sessio/sessio.toml and customize as needed
+#
+# The application will automatically create a default configuration file at
+# ~/.config/sessio/sessio.toml if one doesn't exist.
+#
+# ALARM SOUND: Place an audio file named 'alarm.wav', 'alarm.mp3', 'alarm.ogg', 
+# 'alarm.flac', or 'alarm.m4a' in ~/.config/sessio/ to customize the timer alarm sound.
+# If no audio file is found, the system will use a terminal bell as fallback.
+
+[timer]
+# Pomodoro timer settings (default values shown)
+work_minutes = 25                    # Duration of work sessions in minutes
+short_break_minutes = 5              # Duration of short breaks in minutes
+long_break_minutes = 15              # Duration of long breaks in minutes
+sessions_until_long_break = 4        # Number of work sessions before a long break
+
+[todo]
+# Todo list settings (default values shown)
+max_display_items = 10               # Maximum number of todo items to display at once
+auto_save = true                     # Automatically save todos to file
+# save_path = "custom/path/todos.json"  # Optional: custom path for saving todos
+
+[music]
+# Music player settings (default values shown)
+# music_directory = "/path/to/music"   # Optional: directory to scan for music files
+default_volume = 0.7                 # Default volume (0.0 to 1.0)
+auto_play_next = true               # Automatically play next track when current ends
+
+[theme]
+# Theme settings (default values shown)
+use_dracula = true                   # Use the Dracula color theme
+
+# Configuration can be reloaded at runtime by pressing 'C' (capital C) in the application
