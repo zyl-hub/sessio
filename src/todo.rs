@@ -10,6 +10,7 @@ use chrono::{DateTime, Local, NaiveDate};
 
 use crate::app::{App, Quadrant};
 use crate::theme::DraculaTheme;
+use crate::timer::PomodoroSession;
 
 #[derive(Debug, Clone)]
 pub struct TodoItem {
@@ -46,6 +47,7 @@ pub struct Todo {
     pub undo_stack: Vec<Vec<TodoItem>>,
     pub scroll_offset: usize,
     pub last_visible_height: usize, // Store the last calculated visible height
+    pub pomodoro_sessions: Vec<PomodoroSession>, // Daily pomodoro sessions
 }
 
 impl Todo {
@@ -59,6 +61,7 @@ impl Todo {
             undo_stack: Vec::new(),
             scroll_offset: 0,
             last_visible_height: 8, // Default fallback value
+            pomodoro_sessions: Vec::new(),
         };
         
         // Load existing todos or create default ones
@@ -220,6 +223,33 @@ impl Todo {
             }
         }
         
+        // Add pomodoro session summary
+        if !self.pomodoro_sessions.is_empty() {
+            content.push_str("\n## Pomodoro Sessions\n\n");
+            for session in &self.pomodoro_sessions {
+                content.push_str(&format!(
+                    "### {}\n\
+                     - Work sessions: {}\n\
+                     - Total work time: {} minutes\n\
+                     - Break sessions: {}\n\
+                     - Total break time: {} minutes\n",
+                    session.date.format("%Y-%m-%d"),
+                    session.work_sessions,
+                    session.total_work_minutes,
+                    session.break_sessions,
+                    session.total_break_minutes
+                ));
+                
+                if !session.tasks_worked_on.is_empty() {
+                    content.push_str("- Tasks worked on:\n");
+                    for task in &session.tasks_worked_on {
+                        content.push_str(&format!("  - {}\n", task));
+                    }
+                }
+                content.push('\n');
+            }
+        }
+        
         // Expand ~ to home directory and create parent directories if needed
         let expanded_path = if self.file_path.starts_with("~/") {
             if let Some(home) = dirs::home_dir() {
@@ -263,62 +293,134 @@ impl Todo {
         match fs::read_to_string(&expanded_path) {
             Ok(content) => {
                 self.items.clear();
-                for line in content.lines() {
-                    // Support new markdown checkbox format
-                    if line.starts_with("- [x] ") || line.starts_with("- [ ] ") {
-                        let done = line.starts_with("- [x]");
-                        let rest = &line[6..]; // Remove "- [x] " or "- [ ] "
-                        
-                        if let Some(time_pos) = rest.find(" | Focused time: ") {
-                            let task = rest[..time_pos].to_string();
-                            let time_str = &rest[time_pos + 16..]; // Skip " | Focused time: "
-                            let focused_time = time_str.split_whitespace().next()
-                                .and_then(|s| s.parse::<u32>().ok())
-                                .unwrap_or(0);
+                self.pomodoro_sessions.clear();
+                
+                let lines: Vec<&str> = content.lines().collect();
+                let mut i = 0;
+                let mut in_pomodoro_section = false;
+                let mut current_session: Option<PomodoroSession> = None;
+                
+                while i < lines.len() {
+                    let line = lines[i];
+                    
+                    // Check if we've entered the pomodoro sessions section
+                    if line == "## Pomodoro Sessions" {
+                        in_pomodoro_section = true;
+                        i += 1;
+                        continue;
+                    }
+                    
+                    if !in_pomodoro_section {
+                        // Parse todo items
+                        if line.starts_with("- [x] ") || line.starts_with("- [ ] ") {
+                            let done = line.starts_with("- [x]");
+                            let rest = &line[6..]; // Remove "- [x] " or "- [ ] "
                             
-                            self.items.push(TodoItem {
-                                task,
-                                done,
-                                focused_time,
-                                timeline: Vec::new(),
-                            });
-                        } else {
-                            self.items.push(TodoItem {
-                                task: rest.to_string(),
-                                done,
-                                focused_time: 0,
-                                timeline: Vec::new(),
-                            });
+                            if let Some(time_pos) = rest.find(" | Focused time: ") {
+                                let task = rest[..time_pos].to_string();
+                                let time_str = &rest[time_pos + 16..]; // Skip " | Focused time: "
+                                let focused_time = time_str.split_whitespace().next()
+                                    .and_then(|s| s.parse::<u32>().ok())
+                                    .unwrap_or(0);
+                                
+                                self.items.push(TodoItem {
+                                    task,
+                                    done,
+                                    focused_time,
+                                    timeline: Vec::new(),
+                                });
+                            } else {
+                                self.items.push(TodoItem {
+                                    task: rest.to_string(),
+                                    done,
+                                    focused_time: 0,
+                                    timeline: Vec::new(),
+                                });
+                            }
+                        }
+                        // Support old emoji format for backward compatibility
+                        else if line.starts_with("✅ ") || line.starts_with("⭕ ") {
+                            let done = line.starts_with("✅");
+                            let rest = &line[4..]; // Remove status emoji and space
+                            
+                            if let Some(time_pos) = rest.find(" | Focused time: ") {
+                                let task = rest[..time_pos].to_string();
+                                let time_str = &rest[time_pos + 16..]; // Skip " | Focused time: "
+                                let focused_time = time_str.split_whitespace().next()
+                                    .and_then(|s| s.parse::<u32>().ok())
+                                    .unwrap_or(0);
+                                
+                                self.items.push(TodoItem {
+                                    task,
+                                    done,
+                                    focused_time,
+                                    timeline: Vec::new(),
+                                });
+                            } else {
+                                self.items.push(TodoItem {
+                                    task: rest.to_string(),
+                                    done,
+                                    focused_time: 0,
+                                    timeline: Vec::new(),
+                                });
+                            }
+                        }
+                    } else {
+                        // Parse pomodoro session data
+                        if line.starts_with("### ") {
+                            // Save previous session if exists
+                            if let Some(session) = current_session.take() {
+                                self.pomodoro_sessions.push(session);
+                            }
+                            
+                            // Start new session
+                            let date_str = &line[4..]; // Remove "### "
+                            if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                                current_session = Some(PomodoroSession {
+                                    date,
+                                    work_sessions: 0,
+                                    total_work_minutes: 0,
+                                    break_sessions: 0,
+                                    total_break_minutes: 0,
+                                    tasks_worked_on: Vec::new(),
+                                });
+                            }
+                        } else if let Some(ref mut session) = current_session {
+                            if line.starts_with("- Work sessions: ") {
+                                if let Ok(count) = line[17..].parse::<u32>() {
+                                    session.work_sessions = count;
+                                }
+                            } else if line.starts_with("- Total work time: ") {
+                                if let Some(minutes_str) = line[19..].split_whitespace().next() {
+                                    if let Ok(minutes) = minutes_str.parse::<u32>() {
+                                        session.total_work_minutes = minutes;
+                                    }
+                                }
+                            } else if line.starts_with("- Break sessions: ") {
+                                if let Ok(count) = line[18..].parse::<u32>() {
+                                    session.break_sessions = count;
+                                }
+                            } else if line.starts_with("- Total break time: ") {
+                                if let Some(minutes_str) = line[20..].split_whitespace().next() {
+                                    if let Ok(minutes) = minutes_str.parse::<u32>() {
+                                        session.total_break_minutes = minutes;
+                                    }
+                                }
+                            } else if line.starts_with("  - ") && !line.starts_with("  - Tasks worked on:") {
+                                // Task name
+                                session.tasks_worked_on.push(line[4..].to_string());
+                            }
                         }
                     }
-                    // Support old emoji format for backward compatibility
-                    else if line.starts_with("✅ ") || line.starts_with("⭕ ") {
-                        let done = line.starts_with("✅");
-                        let rest = &line[4..]; // Remove status emoji and space
-                        
-                        if let Some(time_pos) = rest.find(" | Focused time: ") {
-                            let task = rest[..time_pos].to_string();
-                            let time_str = &rest[time_pos + 16..]; // Skip " | Focused time: "
-                            let focused_time = time_str.split_whitespace().next()
-                                .and_then(|s| s.parse::<u32>().ok())
-                                .unwrap_or(0);
-                            
-                            self.items.push(TodoItem {
-                                task,
-                                done,
-                                focused_time,
-                                timeline: Vec::new(),
-                            });
-                        } else {
-                            self.items.push(TodoItem {
-                                task: rest.to_string(),
-                                done,
-                                focused_time: 0,
-                                timeline: Vec::new(),
-                            });
-                        }
-                    }
+                    
+                    i += 1;
                 }
+                
+                // Save the last session if exists
+                if let Some(session) = current_session {
+                    self.pomodoro_sessions.push(session);
+                }
+                
                 true
             }
             Err(_) => false,
@@ -580,5 +682,15 @@ impl Todo {
         if self.is_input_mode {
             self.current_input.pop();
         }
+    }
+    
+    // Pomodoro session management methods
+    pub fn save_pomodoro_sessions(&mut self, sessions: Vec<PomodoroSession>) {
+        self.pomodoro_sessions = sessions;
+        self.save_to_file();
+    }
+    
+    pub fn get_pomodoro_sessions(&self) -> &[PomodoroSession] {
+        &self.pomodoro_sessions
     }
 }

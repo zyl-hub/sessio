@@ -69,11 +69,20 @@ impl AppState {
         let daily_goal_minutes = config.summary.daily_goal_minutes;
         let save_path = config.todo.save_path.clone();
         
+        let mut timer = Timer::new(work_minutes, short_break_minutes, long_break_minutes, sessions_until_long_break);
+        let todo = Todo::new(save_path);
+        
+        // Load pomodoro session data from the todo file if enabled
+        if config.todo.save_pomodoro_data {
+            let sessions = todo.get_pomodoro_sessions().to_vec();
+            timer.load_daily_sessions(sessions);
+        }
+        
         Ok(Self {
             app: App::new(),
-            timer: Timer::new(work_minutes, short_break_minutes, long_break_minutes, sessions_until_long_break),
+            timer,
             summary: Summary::new(daily_goal_minutes),
-            todo: Todo::new(save_path),
+            todo,
             track_list: TrackList::new(music_dir.as_deref()),
             config,
             last_key_time: Instant::now(),
@@ -219,7 +228,14 @@ fn run(mut terminal: DefaultTerminal, mut app_state: AppState) -> Result<()> {
             } else {
                 // Normal navigation and command mode
                 match key.code {
-                    KeyCode::Char('q') => break Ok(()),
+                    KeyCode::Char('q') => {
+                        // Save pomodoro session data before exiting
+                        if app_state.config.todo.save_pomodoro_data {
+                            let sessions = app_state.timer.get_daily_sessions().to_vec();
+                            app_state.todo.save_pomodoro_sessions(sessions);
+                        }
+                        break Ok(());
+                    }
                     
                     // h and l for cycling between panels horizontally
                     KeyCode::Char('h') => {
@@ -281,9 +297,12 @@ fn run(mut terminal: DefaultTerminal, mut app_state: AppState) -> Result<()> {
                     KeyCode::Char('s') => {
                         // Select todo item for timer and add focused time
                         if app_state.app.focused_quadrant == Quadrant::BottomLeft {
-                            if let Some(_selected_task) = app_state.todo.get_selected_task() {
-                                // Set the selected TODO item in the timer
-                                app_state.timer.set_selected_todo(Some(app_state.todo.selected_index));
+                            if let Some(selected_task) = app_state.todo.get_selected_task() {
+                                // Set the selected TODO item in the timer with task name
+                                app_state.timer.set_selected_todo_with_task_name(
+                                    Some(app_state.todo.selected_index), 
+                                    Some(selected_task.task.clone())
+                                );
                                 
                                 // Start the timer if it's not running
                                 if matches!(app_state.timer.state, timer::TimerState::Stopped) {

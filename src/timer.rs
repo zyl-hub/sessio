@@ -9,6 +9,7 @@ use rodio::{OutputStream, Sink, Decoder};
 use std::thread;
 use std::fs::File;
 use std::io::BufReader;
+use chrono::{DateTime, Local, NaiveDate};
 
 use crate::app::{App, Quadrant};
 use crate::theme::DraculaTheme;
@@ -36,6 +37,16 @@ pub enum TimerState {
     Paused,
 }
 
+#[derive(Debug, Clone)]
+pub struct PomodoroSession {
+    pub date: chrono::NaiveDate,
+    pub work_sessions: u32,
+    pub total_work_minutes: u32,
+    pub break_sessions: u32,
+    pub total_break_minutes: u32,
+    pub tasks_worked_on: Vec<String>, // Task names that were worked on
+}
+
 pub struct Timer {
     pub state: TimerState,
     pub phase: PomodoroPhase,
@@ -50,6 +61,10 @@ pub struct Timer {
     pub short_break_duration: Duration,
     pub long_break_duration: Duration,
     pub long_break_interval: u32, // Every N pomodoros
+    
+    // Daily session tracking
+    pub daily_sessions: Vec<PomodoroSession>,
+    pub current_session_start: Option<chrono::DateTime<chrono::Local>>,
 }
 
 impl Timer {
@@ -66,6 +81,8 @@ impl Timer {
             short_break_duration: Duration::from_secs(short_break_minutes * 60),   // Short break duration
             long_break_duration: Duration::from_secs(long_break_minutes * 60),   // Long break duration
             long_break_interval: sessions_until_long_break, // Long break every N pomodoros
+            daily_sessions: Vec::new(),
+            current_session_start: None,
         }
     }
 
@@ -222,12 +239,23 @@ impl Timer {
         
         match self.phase {
             PomodoroPhase::Work => {
+                // Record work session completion
+                let work_minutes = (self.work_duration.as_secs() / 60) as u32;
+                {
+                    let today_session = self.get_today_session();
+                    today_session.work_sessions += 1;
+                    today_session.total_work_minutes += work_minutes;
+                }
+                
                 // Set the flag when work completes and we have a selected TODO
                 if self.selected_todo_index.is_some() {
                     self.work_completed_flag = true;
                 }
                 
                 self.pomodoro_count += 1;
+                // Clear session start time
+                self.current_session_start = None;
+                
                 // Decide next break type
                 if self.pomodoro_count % self.long_break_interval == 0 {
                     self.phase = PomodoroPhase::LongBreak;
@@ -237,7 +265,27 @@ impl Timer {
                     self.time_remaining = self.short_break_duration;
                 }
             }
-            PomodoroPhase::ShortBreak | PomodoroPhase::LongBreak => {
+            PomodoroPhase::ShortBreak => {
+                // Record break completion
+                let break_minutes = (self.short_break_duration.as_secs() / 60) as u32;
+                {
+                    let today_session = self.get_today_session();
+                    today_session.break_sessions += 1;
+                    today_session.total_break_minutes += break_minutes;
+                }
+                
+                self.phase = PomodoroPhase::Work;
+                self.time_remaining = self.work_duration;
+            }
+            PomodoroPhase::LongBreak => {
+                // Record long break completion
+                let break_minutes = (self.long_break_duration.as_secs() / 60) as u32;
+                {
+                    let today_session = self.get_today_session();
+                    today_session.break_sessions += 1;
+                    today_session.total_break_minutes += break_minutes;
+                }
+                
                 self.phase = PomodoroPhase::Work;
                 self.time_remaining = self.work_duration;
             }
@@ -294,6 +342,11 @@ impl Timer {
             TimerState::Stopped | TimerState::Paused => {
                 self.state = TimerState::Running;
                 self.last_tick = Some(Instant::now());
+                
+                // Record session start time for work phases
+                if self.phase == PomodoroPhase::Work && self.current_session_start.is_none() {
+                    self.current_session_start = Some(chrono::Local::now());
+                }
             }
             TimerState::Running => {
                 // Pause
@@ -330,6 +383,18 @@ impl Timer {
         self.selected_todo_index = index;
     }
     
+    pub fn set_selected_todo_with_task_name(&mut self, index: Option<usize>, task_name: Option<String>) {
+        self.selected_todo_index = index;
+        
+        // Add task name to today's session if provided
+        if let Some(name) = task_name {
+            let today_session = self.get_today_session();
+            if !today_session.tasks_worked_on.contains(&name) {
+                today_session.tasks_worked_on.push(name);
+            }
+        }
+    }
+    
     pub fn get_selected_todo(&self) -> Option<usize> {
         self.selected_todo_index
     }
@@ -348,5 +413,41 @@ impl Timer {
     // Clear the work completed flag after processing
     pub fn clear_work_completed_flag(&mut self) {
         self.work_completed_flag = false;
+    }
+    
+    // Session tracking methods
+    pub fn get_today_session(&mut self) -> &mut PomodoroSession {
+        let today = chrono::Local::now().date_naive();
+        
+        // Check if we already have a session for today
+        let session_exists = self.daily_sessions.iter().any(|s| s.date == today);
+        
+        if !session_exists {
+            // Create a new session for today
+            self.daily_sessions.push(PomodoroSession {
+                date: today,
+                work_sessions: 0,
+                total_work_minutes: 0,
+                break_sessions: 0,
+                total_break_minutes: 0,
+                tasks_worked_on: Vec::new(),
+            });
+        }
+        
+        self.daily_sessions.iter_mut().find(|s| s.date == today).unwrap()
+    }
+    
+    pub fn get_daily_sessions(&self) -> &[PomodoroSession] {
+        &self.daily_sessions
+    }
+    
+    pub fn load_daily_sessions(&mut self, sessions: Vec<PomodoroSession>) {
+        self.daily_sessions = sessions;
+        
+        // Restore today's pomodoro count from the loaded sessions
+        let today = chrono::Local::now().date_naive();
+        if let Some(today_session) = self.daily_sessions.iter().find(|s| s.date == today) {
+            self.pomodoro_count = today_session.work_sessions;
+        }
     }
 }

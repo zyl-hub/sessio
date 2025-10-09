@@ -42,6 +42,9 @@ pub struct TodoConfig {
     pub auto_save: bool,
     /// Path to save todos (default: ~/.config/sessio/todos.json)
     pub save_path: Option<String>,
+    /// Save pomodoro session data (default: true)
+    #[serde(default = "default_save_pomodoro_data")]
+    pub save_pomodoro_data: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -58,6 +61,11 @@ pub struct MusicConfig {
 pub struct ThemeConfig {
     /// Use Dracula theme (default: true)
     pub use_dracula: bool,
+}
+
+// Default functions for serde
+fn default_save_pomodoro_data() -> bool {
+    true
 }
 
 impl Default for Config {
@@ -96,6 +104,7 @@ impl Default for TodoConfig {
         TodoConfig {
             auto_save: true,
             save_path: Some("~/.config/sessio/todos.md".to_string()),
+            save_pomodoro_data: true,
         }
     }
 }
@@ -183,6 +192,7 @@ daily_goal_minutes = {}              # Daily focus time goal in minutes
 [todo]
 # Todo list settings (current values shown)
 auto_save = {}                       # Automatically save todos to file
+save_pomodoro_data = {}             # Save pomodoro session data to todos.md
 {}
 
 [music]
@@ -202,6 +212,7 @@ use_dracula = {}                     # Use the Dracula color theme
             self.timer.sessions_until_long_break,
             self.summary.daily_goal_minutes,
             self.todo.auto_save,
+            self.todo.save_pomodoro_data,
             if let Some(ref path) = self.todo.save_path {
                 format!("save_path = \"{}\"                   # Custom path for saving todos\n", path)
             } else {
