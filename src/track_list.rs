@@ -424,6 +424,24 @@ impl TrackList {
         }
     }
 
+    /// Temporarily lower the music volume during alarm
+    pub fn lower_volume_for_alarm(&mut self, alarm_volume: f32) {
+        if let Some(sink_arc) = &self.sink {
+            if let Ok(sink) = sink_arc.lock() {
+                sink.set_volume(alarm_volume);
+            }
+        }
+    }
+
+    /// Restore the normal music volume after alarm
+    pub fn restore_volume(&mut self, normal_volume: f32) {
+        if let Some(sink_arc) = &self.sink {
+            if let Ok(sink) = sink_arc.lock() {
+                sink.set_volume(normal_volume);
+            }
+        }
+    }
+
     /// Handle what happens when a track finishes playing
     fn handle_track_finished(&mut self) {
         if self.tracks.is_empty() {

@@ -107,6 +107,5 @@ This project is licensed under the MIT license ([LICENSE] or <http://opensource.
 ## TODO
 - [ ] alarm sound
 - [ ] theme config
-- [ ] pomodoro timer data save
-- [ ] alarm duration after a session completed
 - [ ] when play music on windows, arrow will point to next song not current
+- [ ] when a task is done, move it to bottom

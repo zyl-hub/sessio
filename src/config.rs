@@ -55,6 +55,10 @@ pub struct MusicConfig {
     pub default_volume: f32,
     /// Auto-play next track (default: true)
     pub auto_play_next: bool,
+    /// Volume during alarm (0.0 to 1.0, default: 0.3)
+    pub alarm_volume: f32,
+    /// Alarm duration in seconds (default: 15)
+    pub alarm_duration_seconds: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -115,6 +119,8 @@ impl Default for MusicConfig {
             music_directory: Some("~/Music".to_string()),
             default_volume: 0.7,
             auto_play_next: true,
+            alarm_volume: 0.3,
+            alarm_duration_seconds: 15,
         }
     }
 }
@@ -199,6 +205,8 @@ save_pomodoro_data = {}             # Save pomodoro session data to todos.md
 # Music player settings (current values shown)
 {}default_volume = {}                # Default volume (0.0 to 1.0)
 auto_play_next = {}                  # Automatically play next track when current ends
+alarm_volume = {}                    # Volume during alarm notification (0.0 to 1.0)
+alarm_duration_seconds = {}          # How long the alarm sound lasts in seconds
 
 [theme]
 # Theme settings (current values shown)
@@ -225,6 +233,8 @@ use_dracula = {}                     # Use the Dracula color theme
             },
             self.music.default_volume,
             self.music.auto_play_next,
+            self.music.alarm_volume,
+            self.music.alarm_duration_seconds,
             self.theme.use_dracula
         )
     }

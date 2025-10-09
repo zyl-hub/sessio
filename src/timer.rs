@@ -10,10 +10,12 @@ use std::thread;
 use std::fs::File;
 use std::io::BufReader;
 use chrono::{DateTime, Local, NaiveDate};
+use std::sync::{Arc, Mutex};
 
 use crate::app::{App, Quadrant};
 use crate::theme::DraculaTheme;
 use crate::todo::TodoItem;
+use crate::config::Config;
 
 // Helper function to format duration
 fn format_duration(duration: Duration) -> String {
@@ -65,10 +67,16 @@ pub struct Timer {
     // Daily session tracking
     pub daily_sessions: Vec<PomodoroSession>,
     pub current_session_start: Option<chrono::DateTime<chrono::Local>>,
+    
+    // Alarm settings
+    pub alarm_volume: f32,
+    pub alarm_duration_seconds: u64,
+    pub alarm_active: bool,
+    pub alarm_end_time: Option<Instant>,
 }
 
 impl Timer {
-    pub fn new(work_minutes: u64, short_break_minutes: u64, long_break_minutes: u64, sessions_until_long_break: u32) -> Self {
+    pub fn new(work_minutes: u64, short_break_minutes: u64, long_break_minutes: u64, sessions_until_long_break: u32, alarm_volume: f32, alarm_duration_seconds: u64) -> Self {
         Self {
             state: TimerState::Stopped,
             phase: PomodoroPhase::Work,
@@ -83,6 +91,10 @@ impl Timer {
             long_break_interval: sessions_until_long_break, // Long break every N pomodoros
             daily_sessions: Vec::new(),
             current_session_start: None,
+            alarm_volume,
+            alarm_duration_seconds,
+            alarm_active: false,
+            alarm_end_time: None,
         }
     }
 
@@ -295,9 +307,17 @@ impl Timer {
     }
 
     /// Play an alarm sound when timer completes
-    fn play_alarm(&self) {
+    /// Sets the alarm state for coordinating with music volume
+    fn play_alarm(&mut self) {
+        let alarm_volume = self.alarm_volume;
+        let alarm_duration = self.alarm_duration_seconds;
+        
+        // Set alarm state
+        self.alarm_active = true;
+        self.alarm_end_time = Some(Instant::now() + Duration::from_secs(alarm_duration));
+        
         // Spawn a thread to play the alarm sound without blocking
-        thread::spawn(|| {
+        thread::spawn(move || {
             // Try to load alarm sound from config directory
             let alarm_path = if let Some(config_dir) = dirs::config_dir() {
                 let sessio_config_dir = config_dir.join("sessio");
@@ -317,21 +337,36 @@ impl Timer {
 
             if let Ok((_stream, stream_handle)) = OutputStream::try_default() {
                 if let Ok(sink) = Sink::try_new(&stream_handle) {
+                    // Set alarm volume
+                    sink.set_volume(alarm_volume);
+                    
                     if let Some(path) = alarm_path {
                         // Play the audio file
                         if let Ok(file) = File::open(&path) {
                             let buf_reader = BufReader::new(file);
                             if let Ok(source) = Decoder::new(buf_reader) {
                                 sink.append(source);
-                                sink.sleep_until_end();
+                                
+                                // Wait for the specified alarm duration
+                                let start_time = std::time::Instant::now();
+                                while !sink.empty() && start_time.elapsed().as_secs() < alarm_duration {
+                                    std::thread::sleep(std::time::Duration::from_millis(100));
+                                }
+                                
+                                // Stop the alarm after the duration
+                                sink.stop();
                                 return;
                             }
                         }
                     }
                     
-                    // Fallback: system beep using terminal bell if no audio file found
-                    print!("\x07"); // ASCII bell character
-                    std::io::Write::flush(&mut std::io::stdout()).ok();
+                    // Fallback: create a simple beep tone for the duration if no audio file found
+                    let beep_count = (alarm_duration as f32 / 0.5).ceil() as u64; // Beep every 500ms
+                    for _ in 0..beep_count {
+                        print!("\x07"); // ASCII bell character
+                        std::io::Write::flush(&mut std::io::stdout()).ok();
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                    }
                 }
             }
         });
@@ -449,5 +484,30 @@ impl Timer {
         if let Some(today_session) = self.daily_sessions.iter().find(|s| s.date == today) {
             self.pomodoro_count = today_session.work_sessions;
         }
+    }
+    
+    /// Update alarm state and return true if alarm should still be active
+    pub fn update_alarm_state(&mut self) -> bool {
+        if self.alarm_active {
+            if let Some(end_time) = self.alarm_end_time {
+                if Instant::now() >= end_time {
+                    self.alarm_active = false;
+                    self.alarm_end_time = None;
+                    return false;
+                }
+                return true;
+            }
+        }
+        false
+    }
+    
+    /// Check if alarm is currently active
+    pub fn is_alarm_active(&self) -> bool {
+        self.alarm_active
+    }
+    
+    /// Get alarm volume setting
+    pub fn get_alarm_volume(&self) -> f32 {
+        self.alarm_volume
     }
 }

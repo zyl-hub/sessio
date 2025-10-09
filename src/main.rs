@@ -54,6 +54,7 @@ struct AppState {
     config: Config,
     last_key_time: Instant,
     last_key_code: Option<KeyCode>,
+    was_alarm_active_last_update: bool,
 }
 
 impl AppState {
@@ -69,7 +70,9 @@ impl AppState {
         let daily_goal_minutes = config.summary.daily_goal_minutes;
         let save_path = config.todo.save_path.clone();
         
-        let mut timer = Timer::new(work_minutes, short_break_minutes, long_break_minutes, sessions_until_long_break);
+        let alarm_volume = config.music.alarm_volume;
+        let alarm_duration_seconds = config.music.alarm_duration_seconds;
+        let mut timer = Timer::new(work_minutes, short_break_minutes, long_break_minutes, sessions_until_long_break, alarm_volume, alarm_duration_seconds);
         let todo = Todo::new(save_path);
         
         // Load pomodoro session data from the todo file if enabled
@@ -87,6 +90,7 @@ impl AppState {
             config,
             last_key_time: Instant::now(),
             last_key_code: None,
+            was_alarm_active_last_update: false,
         })
     }
     
@@ -116,6 +120,19 @@ fn run(mut terminal: DefaultTerminal, mut app_state: AppState) -> Result<()> {
         
         // Update music playback state (check for track finished, auto-advance)
         app_state.track_list.update_playback_state();
+        
+        // Coordinate music volume with alarm state
+        let is_alarm_active = app_state.timer.update_alarm_state();
+        
+        if is_alarm_active && !app_state.was_alarm_active_last_update {
+            // Alarm just started - lower music volume
+            app_state.track_list.lower_volume_for_alarm(app_state.timer.get_alarm_volume());
+        } else if !is_alarm_active && app_state.was_alarm_active_last_update {
+            // Alarm just ended - restore normal music volume
+            app_state.track_list.restore_volume(app_state.config.music.default_volume);
+        }
+        
+        app_state.was_alarm_active_last_update = is_alarm_active;
         
         // Use timeout when timer is running, poll immediately when stopped
         let timeout = if matches!(app_state.timer.state, timer::TimerState::Running) {
