@@ -1,34 +1,37 @@
-# Example configuration file for sessio
-# Copy this to ~/.config/sessio/sessio.toml and customize as needed
+# sessio Configuration File
+# This file is located at ~/.config/sessio/sessio.toml
 #
-# The application will automatically create a default configuration file at
-# ~/.config/sessio/sessio.toml if one doesn't exist.
-#
-# ALARM SOUND: Place an audio file named 'alarm.wav', 'alarm.mp3', 'alarm.ogg', 
-# 'alarm.flac', or 'alarm.m4a' in ~/.config/sessio/ to customize the timer alarm sound.
-# If no audio file is found, the system will use a terminal bell as fallback.
+# The application will automatically create this configuration file with default values
+# if one doesn't exist. You can modify these settings and reload with 'C' key in the app.
 
 [timer]
-# Pomodoro timer settings (default values shown)
+# Pomodoro timer settings (current values shown)
 work_minutes = 25                    # Duration of work sessions in minutes
-short_break_minutes = 5              # Duration of short breaks in minutes
+short_break_minutes = 5             # Duration of short breaks in minutes
 long_break_minutes = 15              # Duration of long breaks in minutes
-sessions_until_long_break = 4        # Number of work sessions before a long break
+sessions_until_long_break = 4       # Number of work sessions before a long break
+
+[summary]
+# Summary panel settings (current values shown)
+daily_goal_minutes = 120              # Daily focus time goal in minutes
 
 [todo]
-# Todo list settings (default values shown)
-max_display_items = 10               # Maximum number of todo items to display at once
-auto_save = true                     # Automatically save todos to file
-# save_path = "custom/path/todos.json"  # Optional: custom path for saving todos
+# Todo list settings (current values shown)
+auto_save = true                       # Automatically save todos to file
+save_pomodoro_data = true             # Save pomodoro session data to todos.md
+save_path = "~/.config/sessio/todos.md"                   # Custom path for saving todos
+
 
 [music]
-# Music player settings (default values shown)
-# music_directory = "/path/to/music"   # Optional: directory to scan for music files
-default_volume = 0.7                 # Default volume (0.0 to 1.0)
-auto_play_next = true               # Automatically play next track when current ends
+# Music player settings (current values shown)
+music_directory = "~/Music"           # Directory to scan for music files
+default_volume = 0.7                # Default volume (0.0 to 1.0)
+auto_play_next = true                  # Automatically play next track when current ends
+alarm_volume = 0.3                    # Volume during alarm notification (0.0 to 1.0)
+alarm_duration_seconds = 15          # How long the alarm sound lasts in seconds
 
 [theme]
-# Theme settings (default values shown)
-use_dracula = true                   # Use the Dracula color theme
+# Theme settings (current values shown)
+use_dracula = true                     # Use the Dracula color theme
 
 # Configuration can be reloaded at runtime by pressing 'C' (capital C) in the application
