@@ -57,6 +57,7 @@ pub struct Timer {
     pub last_tick: Option<Instant>,
     pub selected_todo_index: Option<usize>, // Track which TODO item is being timed
     pub work_completed_flag: bool, // Flag to track when work session completes
+    pub session_data_updated_flag: bool, // Flag to track when session data has been updated
     
     // Pomodoro durations (in seconds)
     pub work_duration: Duration,
@@ -86,6 +87,7 @@ impl Timer {
             last_tick: None,
             selected_todo_index: None,
             work_completed_flag: false,
+            session_data_updated_flag: false,
             work_duration: Duration::from_secs(work_minutes * 60),        // Work duration
             short_break_duration: Duration::from_secs(short_break_minutes * 60),   // Short break duration
             long_break_duration: Duration::from_secs(long_break_minutes * 60),   // Long break duration
@@ -248,18 +250,34 @@ impl Timer {
     }
     
     fn complete_phase(&mut self) {
-        // Play alarm sound when any phase completes
-        self.play_alarm();
+        self.complete_phase_internal(false);
+    }
+    
+    fn complete_phase_internal(&mut self, is_skip: bool) {
+        // Play alarm sound when any phase completes (but not when skipping)
+        if !is_skip {
+            self.play_alarm();
+        }
         
         match self.phase {
             PomodoroPhase::Work => {
                 // Record work session completion
-                let work_minutes = (self.work_duration.as_secs() / 60) as u32;
+                // If skipped, calculate actual elapsed time; otherwise use full duration
+                let work_minutes = if is_skip {
+                    let elapsed = self.work_duration.saturating_sub(self.time_remaining);
+                    (elapsed.as_secs() / 60) as u32
+                } else {
+                    (self.work_duration.as_secs() / 60) as u32
+                };
+                
                 {
                     let today_session = self.get_today_session();
                     today_session.work_sessions += 1;
                     today_session.total_work_minutes += work_minutes;
                 }
+                
+                // Set the session data updated flag
+                self.session_data_updated_flag = true;
                 
                 // Set the flag when work completes and we have a selected TODO
                 if self.selected_todo_index.is_some() {
@@ -281,24 +299,44 @@ impl Timer {
             }
             PomodoroPhase::ShortBreak => {
                 // Record break completion
-                let break_minutes = (self.short_break_duration.as_secs() / 60) as u32;
+                // If skipped, calculate actual elapsed time; otherwise use full duration
+                let break_minutes = if is_skip {
+                    let elapsed = self.short_break_duration.saturating_sub(self.time_remaining);
+                    (elapsed.as_secs() / 60) as u32
+                } else {
+                    (self.short_break_duration.as_secs() / 60) as u32
+                };
+                
                 {
                     let today_session = self.get_today_session();
                     today_session.break_sessions += 1;
                     today_session.total_break_minutes += break_minutes;
                 }
                 
+                // Set the session data updated flag
+                self.session_data_updated_flag = true;
+                
                 self.phase = PomodoroPhase::Work;
                 self.time_remaining = self.work_duration;
             }
             PomodoroPhase::LongBreak => {
                 // Record long break completion
-                let break_minutes = (self.long_break_duration.as_secs() / 60) as u32;
+                // If skipped, calculate actual elapsed time; otherwise use full duration
+                let break_minutes = if is_skip {
+                    let elapsed = self.long_break_duration.saturating_sub(self.time_remaining);
+                    (elapsed.as_secs() / 60) as u32
+                } else {
+                    (self.long_break_duration.as_secs() / 60) as u32
+                };
+                
                 {
                     let today_session = self.get_today_session();
                     today_session.break_sessions += 1;
                     today_session.total_break_minutes += break_minutes;
                 }
+                
+                // Set the session data updated flag
+                self.session_data_updated_flag = true;
                 
                 self.phase = PomodoroPhase::Work;
                 self.time_remaining = self.work_duration;
@@ -430,7 +468,7 @@ impl Timer {
     }
     
     pub fn skip_phase(&mut self) {
-        self.complete_phase();
+        self.complete_phase_internal(true);
     }
     
     pub fn toggle_start_pause(&mut self) {
@@ -532,5 +570,15 @@ impl Timer {
     /// Get alarm volume setting
     pub fn get_alarm_volume(&self) -> f32 {
         self.alarm_volume
+    }
+    
+    /// Check if session data has been updated (for syncing with todo)
+    pub fn session_data_just_updated(&self) -> bool {
+        self.session_data_updated_flag
+    }
+    
+    /// Clear the session data updated flag after processing
+    pub fn clear_session_data_updated_flag(&mut self) {
+        self.session_data_updated_flag = false;
     }
 }

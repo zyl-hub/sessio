@@ -654,19 +654,19 @@ impl Todo {
     // Statistics methods for summary panel
     pub fn get_today_minutes(&self) -> u32 {
         let today = chrono::Local::now().date_naive();
-        self.items.iter()
-            .flat_map(|item| &item.timeline)
+        // Calculate from pomodoro sessions instead of task timelines
+        self.pomodoro_sessions.iter()
             .filter(|session| session.date == today)
-            .map(|session| session.minutes)
+            .map(|session| session.total_work_minutes)
             .sum()
     }
     
     pub fn get_yesterday_minutes(&self) -> u32 {
         let yesterday = chrono::Local::now().date_naive() - chrono::Duration::days(1);
-        self.items.iter()
-            .flat_map(|item| &item.timeline)
+        // Calculate from pomodoro sessions instead of task timelines
+        self.pomodoro_sessions.iter()
             .filter(|session| session.date == yesterday)
-            .map(|session| session.minutes)
+            .map(|session| session.total_work_minutes)
             .sum()
     }
     

@@ -432,6 +432,15 @@ fn render(frame: &mut Frame, app_state: &mut AppState) {
             app_state.timer.clear_work_completed_flag();
         }
     }
+    
+    // Sync pomodoro session data from timer to todo whenever it's updated
+    if app_state.timer.session_data_just_updated() {
+        if app_state.config.todo.save_pomodoro_data {
+            let sessions = app_state.timer.get_daily_sessions().to_vec();
+            app_state.todo.save_pomodoro_sessions(sessions);
+        }
+        app_state.timer.clear_session_data_updated_flag();
+    }
 
     // Create main vertical layout (top and bottom)
     let main_layout = Layout::default()
