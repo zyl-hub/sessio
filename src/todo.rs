@@ -542,7 +542,52 @@ impl Todo {
     pub fn toggle_selected_task(&mut self) {
         if self.selected_index < self.items.len() {
             self.save_state_for_undo();
+            
+            let was_done = self.items[self.selected_index].done;
             self.items[self.selected_index].done = !self.items[self.selected_index].done;
+            
+            // If the task was just marked as done, move it to the bottom
+            if !was_done && self.items[self.selected_index].done {
+                let completed_task = self.items.remove(self.selected_index);
+                self.items.push(completed_task);
+                
+                // Adjust selection to stay within bounds
+                if self.selected_index >= self.items.len() {
+                    self.selected_index = if self.items.len() > 0 { self.items.len() - 1 } else { 0 };
+                }
+                
+                // Adjust scroll offset if needed to keep selection visible
+                let visible_height = self.calculate_visible_height();
+                if self.selected_index < self.scroll_offset {
+                    self.scroll_offset = self.selected_index;
+                } else if self.selected_index >= self.scroll_offset + visible_height {
+                    self.scroll_offset = self.selected_index.saturating_sub(visible_height - 1);
+                }
+            }
+            // If the task was unmarked (done -> not done), move it back to its natural position
+            // For simplicity, we'll move it to the top of uncompleted tasks
+            else if was_done && !self.items[self.selected_index].done {
+                let uncompleted_task = self.items.remove(self.selected_index);
+                
+                // Find the first completed task position, or end of list if no completed tasks
+                let insert_position = self.items.iter()
+                    .position(|item| item.done)
+                    .unwrap_or(self.items.len());
+                
+                self.items.insert(insert_position, uncompleted_task);
+                
+                // Update selection to follow the moved item
+                self.selected_index = insert_position;
+                
+                // Adjust scroll offset if needed
+                let visible_height = self.calculate_visible_height();
+                if self.selected_index < self.scroll_offset {
+                    self.scroll_offset = self.selected_index;
+                } else if self.selected_index >= self.scroll_offset + visible_height {
+                    self.scroll_offset = self.selected_index.saturating_sub(visible_height - 1);
+                }
+            }
+            
             self.save_to_file();
         }
     }
