@@ -29,6 +29,8 @@ default_volume = 0.7                # Default volume (0.0 to 1.0)
 auto_play_next = true                  # Automatically play next track when current ends
 alarm_volume = 0.3                    # Volume during alarm notification (0.0 to 1.0)
 alarm_duration_seconds = 15          # How long the alarm sound lasts in seconds
+# alarm_file_path = "~/alarm.wav"        # Optional: custom alarm sound file path
+# When not set, sessio will find a file named alarm.mp3 or alarm.wav in the sessio config directory
 
 [theme]
 # Theme settings (current values shown)

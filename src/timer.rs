@@ -71,12 +71,13 @@ pub struct Timer {
     // Alarm settings
     pub alarm_volume: f32,
     pub alarm_duration_seconds: u64,
+    pub alarm_file_path: Option<String>,
     pub alarm_active: bool,
     pub alarm_end_time: Option<Instant>,
 }
 
 impl Timer {
-    pub fn new(work_minutes: u64, short_break_minutes: u64, long_break_minutes: u64, sessions_until_long_break: u32, alarm_volume: f32, alarm_duration_seconds: u64) -> Self {
+    pub fn new(work_minutes: u64, short_break_minutes: u64, long_break_minutes: u64, sessions_until_long_break: u32, alarm_volume: f32, alarm_duration_seconds: u64, alarm_file_path: Option<String>) -> Self {
         Self {
             state: TimerState::Stopped,
             phase: PomodoroPhase::Work,
@@ -93,6 +94,7 @@ impl Timer {
             current_session_start: None,
             alarm_volume,
             alarm_duration_seconds,
+            alarm_file_path,
             alarm_active: false,
             alarm_end_time: None,
         }
@@ -311,6 +313,7 @@ impl Timer {
     fn play_alarm(&mut self) {
         let alarm_volume = self.alarm_volume;
         let alarm_duration = self.alarm_duration_seconds;
+        let alarm_file_path = self.alarm_file_path.clone();
         
         // Set alarm state
         self.alarm_active = true;
@@ -318,21 +321,41 @@ impl Timer {
         
         // Spawn a thread to play the alarm sound without blocking
         thread::spawn(move || {
-            // Try to load alarm sound from config directory
-            let alarm_path = if let Some(config_dir) = dirs::config_dir() {
-                let sessio_config_dir = config_dir.join("sessio");
-                let alarm_file = sessio_config_dir.join("alarm.wav");
-                if alarm_file.exists() {
-                    Some(alarm_file)
+            // Try to load alarm sound - first check configured path, then fallback to default locations
+            let alarm_path = if let Some(configured_path) = alarm_file_path {
+                // Expand ~ to home directory if present
+                let expanded_path = if configured_path.starts_with("~/") {
+                    if let Some(home) = dirs::home_dir() {
+                        home.join(&configured_path[2..])
+                    } else {
+                        std::path::PathBuf::from(configured_path)
+                    }
                 } else {
-                    // Try other common audio formats
-                    let extensions = ["alarm.mp3", "alarm.ogg", "alarm.flac", "alarm.m4a"];
-                    extensions.iter()
-                        .map(|ext| sessio_config_dir.join(ext))
-                        .find(|path| path.exists())
+                    std::path::PathBuf::from(configured_path)
+                };
+                
+                if expanded_path.exists() {
+                    Some(expanded_path)
+                } else {
+                    None // Configured file doesn't exist, fallback to default search
                 }
             } else {
-                None
+                // No configured path, use default search behavior
+                if let Some(config_dir) = dirs::config_dir() {
+                    let sessio_config_dir = config_dir.join("sessio");
+                    let alarm_file = sessio_config_dir.join("alarm.wav");
+                    if alarm_file.exists() {
+                        Some(alarm_file)
+                    } else {
+                        // Try other common audio formats
+                        let extensions = ["alarm.mp3", "alarm.ogg", "alarm.flac", "alarm.m4a"];
+                        extensions.iter()
+                            .map(|ext| sessio_config_dir.join(ext))
+                            .find(|path| path.exists())
+                    }
+                } else {
+                    None
+                }
             };
 
             if let Ok((_stream, stream_handle)) = OutputStream::try_default() {

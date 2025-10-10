@@ -72,7 +72,8 @@ impl AppState {
         
         let alarm_volume = config.music.alarm_volume;
         let alarm_duration_seconds = config.music.alarm_duration_seconds;
-        let mut timer = Timer::new(work_minutes, short_break_minutes, long_break_minutes, sessions_until_long_break, alarm_volume, alarm_duration_seconds);
+        let alarm_file_path = config.music.alarm_file_path.clone();
+        let mut timer = Timer::new(work_minutes, short_break_minutes, long_break_minutes, sessions_until_long_break, alarm_volume, alarm_duration_seconds, alarm_file_path);
         let todo = Todo::new(save_path);
         
         // Load pomodoro session data from the todo file if enabled

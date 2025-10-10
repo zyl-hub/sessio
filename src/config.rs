@@ -59,6 +59,8 @@ pub struct MusicConfig {
     pub alarm_volume: f32,
     /// Alarm duration in seconds (default: 15)
     pub alarm_duration_seconds: u64,
+    /// Custom alarm sound file path
+    pub alarm_file_path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -121,6 +123,7 @@ impl Default for MusicConfig {
             auto_play_next: true,
             alarm_volume: 0.3,
             alarm_duration_seconds: 15,
+            alarm_file_path: None, // Use default alarm search behavior
         }
     }
 }
@@ -207,6 +210,7 @@ save_pomodoro_data = {}             # Save pomodoro session data to todos.md
 auto_play_next = {}                  # Automatically play next track when current ends
 alarm_volume = {}                    # Volume during alarm notification (0.0 to 1.0)
 alarm_duration_seconds = {}          # How long the alarm sound lasts in seconds
+{}
 
 [theme]
 # Theme settings (current values shown)
@@ -235,6 +239,11 @@ use_dracula = {}                     # Use the Dracula color theme
             self.music.auto_play_next,
             self.music.alarm_volume,
             self.music.alarm_duration_seconds,
+            if let Some(ref path) = self.music.alarm_file_path {
+                format!("alarm_file_path = \"{}\"            # Custom alarm sound file path\n", path)
+            } else {
+                "# alarm_file_path = \"~/alarm.wav\"      # Optional: custom alarm sound file path\n".to_string()
+            },
             self.theme.use_dracula
         )
     }
