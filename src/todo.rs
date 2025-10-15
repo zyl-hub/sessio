@@ -51,6 +51,17 @@ pub struct Todo {
 }
 
 impl Todo {
+    /// Safely truncate a string to max_chars characters (not bytes), appending "..." if truncated
+    fn truncate_chars(s: &str, max_chars: usize) -> String {
+        let char_count = s.chars().count();
+        if char_count <= max_chars {
+            s.to_string()
+        } else {
+            let truncated: String = s.chars().take(max_chars).collect();
+            format!("{}...", truncated)
+        }
+    }
+
     pub fn new(save_path: Option<String>) -> Self {
         let mut todo = Self {
             items: Vec::new(),
@@ -103,9 +114,9 @@ impl Todo {
                     let actual_index = self.scroll_offset + relative_i;
                     let status = if item.done { "✅" } else { "⭕" };
                     
-                    // Truncate task text if too long
-                    let truncated_task = if item.task.len() > max_task_width {
-                        format!("{}...", &item.task[..max_task_width.saturating_sub(3)])
+                    // Truncate task text if too long (char-safe for UTF-8)
+                    let truncated_task = if item.task.chars().count() > max_task_width {
+                        Self::truncate_chars(&item.task, max_task_width.saturating_sub(3))
                     } else {
                         item.task.clone()
                     };
@@ -152,8 +163,8 @@ impl Todo {
             let selected_info = if !self.items.is_empty() {
                 let selected_task = self.items.get(self.selected_index)
                     .map(|item| {
-                        if item.task.len() > 30 {
-                            format!("{}...", &item.task[..27])
+                        if item.task.chars().count() > 30 {
+                            Self::truncate_chars(&item.task, 27)
                         } else {
                             item.task.clone()
                         }
