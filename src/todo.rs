@@ -430,7 +430,7 @@ impl Todo {
     // Todo functionality methods
     pub fn add_task(&mut self, task: String) {
         if !task.trim().is_empty() {
-            self.items.push(TodoItem::new(task));
+            self.items.insert(0, TodoItem::new(task));
             self.save_to_file();
         }
     }
@@ -710,7 +710,10 @@ impl Todo {
     pub fn submit_new_task(&mut self) {
         if !self.current_input.trim().is_empty() {
             self.save_state_for_undo();
-            self.items.push(TodoItem::new(self.current_input.clone()));
+            self.items.insert(0, TodoItem::new(self.current_input.clone()));
+            // Set selection to the newly added item at the top
+            self.selected_index = 0;
+            self.scroll_offset = 0;
             self.save_to_file();
         }
         self.is_input_mode = false;
